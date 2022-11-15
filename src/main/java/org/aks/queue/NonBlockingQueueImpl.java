@@ -1,7 +1,9 @@
 package org.aks.queue;
 
 import org.aks.consumer.MessageFilter;
+import org.aks.exception.CustomException;
 import org.aks.message.Message;
+import org.aks.validation.MessageValidator;
 
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -10,12 +12,16 @@ public class NonBlockingQueueImpl<E> implements Queue<E> {
     private final AtomicReference<CircularQueuePtr> queuePtrRef = new AtomicReference<>(new CircularQueuePtr());
     private final E[] queue;
 
-    public NonBlockingQueueImpl(int queueSize) {
+    private final MessageValidator<E> messageValidator;
+
+    public NonBlockingQueueImpl(int queueSize,MessageValidator<E> messageValidator) {
         queue = (E[]) new Object[queueSize];
+        this.messageValidator = messageValidator;
     }
 
     @Override
     public boolean offer(E e) {
+        validateMessage(e);
         boolean result = false;
         boolean casResult = false;
         while (!casResult) {
@@ -39,6 +45,12 @@ public class NonBlockingQueueImpl<E> implements Queue<E> {
         return result;
     }
 
+    private void validateMessage(E e) {
+        if (!messageValidator.validate(e)) {
+            throw new CustomException(messageValidator.getDetails());
+        }
+    }
+
     @Override
     public E poll() {
         E res = null;
@@ -50,7 +62,7 @@ public class NonBlockingQueueImpl<E> implements Queue<E> {
                 if (queuePtrRef.head == queuePtrRef.tail) {
                     res = queue[queuePtrRef.head];
                     //update head to -1 and tail to 0 as queue is now empty
-                    casResult = this.queuePtrRef.compareAndSet(queuePtrRef, new CircularQueuePtr(-1, 0));
+                    casResult = this.queuePtrRef.compareAndSet(queuePtrRef, new CircularQueuePtr(-1, -1));
                     if (casResult) {
                         queue[queuePtrRef.head] = null;
                         System.out.println("Message removed from Queue, message= " + ((Message<String>) res).getMessage() + " :: queueSize=" + size(this.queuePtrRef.get()));
@@ -74,37 +86,38 @@ public class NonBlockingQueueImpl<E> implements Queue<E> {
     @Override
     public E poll(MessageFilter messageFilter) {
         E res = null;
+
         boolean casResult = false;
         while (!casResult) {
             CircularQueuePtr queuePtrRef = this.queuePtrRef.get();
             if (!isEmpty(queuePtrRef)) {
                 //if head and tail are same it means we have only one element in queue
                 res = queue[queuePtrRef.head];
-                if (!isMatch(messageFilter, res)) {
-                    res = null;
-                } else {
-                    if (((Message<?>) res).isExpired()) {
-                        System.out.println(Thread.currentThread().getName() + " :: Message Expired, message=" + ((Message<?>) res).getMessage());
-                        res = null;
-                    }
+                CircularQueuePtr updated = null;
+                if (queuePtrRef.head == queuePtrRef.tail) {
+                    //update head to -1 and tail to 0 as queue is now empty
+                    updated = new CircularQueuePtr(-1, -1);
+                    casResult = this.queuePtrRef.compareAndSet(queuePtrRef, updated);
 
-                    if (queuePtrRef.head == queuePtrRef.tail) {
-                        //update head to -1 and tail to 0 as queue is now empty
-                        CircularQueuePtr updated = new CircularQueuePtr(-1, -1);
-                        casResult = this.queuePtrRef.compareAndSet(queuePtrRef, updated);
-                        if (casResult) {
-                            queue[queuePtrRef.head] = null;
-                            System.out.println(Thread.currentThread().getName() + " :: Message removed from Queue, message= " + ((Message<String>) res).getMessage() + " :: queueSize=" + size(updated));
-                        }
-                    } else {
-                        int newHead = (queuePtrRef.head + 1) % queue.length;
-                        CircularQueuePtr updated = new CircularQueuePtr(newHead, queuePtrRef.tail);
-                        casResult = this.queuePtrRef.compareAndSet(queuePtrRef, updated);
-                        if (casResult) {
-                            queue[queuePtrRef.head] = null;
-                            System.out.println(Thread.currentThread().getName() + " :: Message removed from Queue, message= " + ((Message<String>) res).getMessage() + " :: queueSize=" + size(updated));
-                        }
+                } else {
+                    int newHead = (queuePtrRef.head + 1) % queue.length;
+                    updated = new CircularQueuePtr(newHead, queuePtrRef.tail);
+                    casResult = this.queuePtrRef.compareAndSet(queuePtrRef, updated);
+
+                }
+                if (casResult) {
+                    if (((Message<?>) res).isExpired()) {
+                        System.out.println(Thread.currentThread().getName() + " :: Message Expired.Next message will be fetched , message=" + ((Message<?>) res).getMessage());
+                        res = null;
+                        casResult = false; //Setting false to fetch next non expired message in next iteration
+                    }else if(!isMatch(messageFilter, res)){
+                        System.out.println(Thread.currentThread().getName() + " :: Message not matched. Message removed from Queue, message= " + ((Message<String>) res).getMessage() + " :: queueSize=" + size(updated));
+                        res = null;
+                    }else {
+                        System.out.println(Thread.currentThread().getName() + " :: Message removed from Queue, message= " + ((Message<String>) res).getMessage() + " :: queueSize=" + size(updated));
                     }
+                    queue[queuePtrRef.head] = null;
+
                 }
             } else {
                 casResult = true;

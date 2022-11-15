@@ -5,10 +5,10 @@ import org.aks.queue.Queue;
 
 public class ConsumerImpl extends AbstractConsumer<Message<String>> {
    public ConsumerImpl(Queue queue, String consumerName) {
-        super(queue, consumerName,new DummyMessageFilterImpl<>());
-      }
-    public ConsumerImpl(Queue queue, String consumerName, MessageFilter<Message<String>> filter) {
-        super(queue, consumerName,filter);
+        super(queue, consumerName,new DummyMessageFilterImpl<>(),new DeadLetterQueueImpl<>());
+   }
+    public ConsumerImpl(Queue queue, String consumerName, MessageFilter<Message<String>> filter,DeadLetterQueue<Message<String>> deadLetterQueue) {
+        super(queue, consumerName,filter,deadLetterQueue);
     }
 
     @Override

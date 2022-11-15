@@ -8,24 +8,22 @@ public abstract class AbstractConsumer<T> implements Consumer{
     final int retryMaxCount =3;
     private MessageFilter<T> messageFilter;
 
-    public AbstractConsumer(Queue queue,String consumerName) {
+    private final DeadLetterQueue<T> deadLetterQueue;
+
+    public AbstractConsumer(Queue queue,String consumerName,DeadLetterQueue<T> deadLetterQueue) {
         this.queue = queue;
         this.consumerName =consumerName;
+        this.deadLetterQueue = deadLetterQueue;
     }
-    public AbstractConsumer(Queue queue,String consumerName,MessageFilter<T> messageFilter) {
+    public AbstractConsumer(Queue queue,String consumerName,MessageFilter<T> messageFilter,DeadLetterQueue<T> deadLetterQueue) {
         this.queue = queue;
         this.consumerName =consumerName;
         this.messageFilter =messageFilter;
+        this.deadLetterQueue = deadLetterQueue;
     }
 
     @Override
     public void process() {
-         if(messageFilter!= null){
-            T message = queue.poll(messageFilter);
-//            while(messageFilter.validate(message)){
-//
-//            }
-        }
         T message = queue.poll(messageFilter);
         handleMessage(message,0);
     }
@@ -37,7 +35,7 @@ public abstract class AbstractConsumer<T> implements Consumer{
             if (retryCount < retryMaxCount) {
                 handleMessage(message, ++retryCount);
             } else {
-              //TODO handle failure;
+             deadLetterQueue.add(message);
             }
         }
     }

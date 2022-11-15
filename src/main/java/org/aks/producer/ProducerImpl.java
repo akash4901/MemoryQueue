@@ -9,16 +9,14 @@ import org.aks.queue.Queue;
 public class ProducerImpl<M> implements Producer<M> {
 
     private final Queue<Message<M>> queue;
-    private MessageValidator<M> messageValidator;
     private int retryCount = 0;
 
-    public ProducerImpl(Queue<Message<M>> queue, MessageValidator<M> messageValidator,int retryCount) {
+    public ProducerImpl(Queue<Message<M>> queue,int retryCount) {
         this.queue = queue;
-        this.messageValidator = messageValidator;
         this.retryCount = retryCount;
     }
 
-    public ProducerImpl(Queue<Message<M>> queue,MessageValidator<M> messageValidator) {
+    public ProducerImpl(Queue<Message<M>> queue) {
         this.queue = queue;
     }
 
@@ -26,10 +24,7 @@ public class ProducerImpl<M> implements Producer<M> {
 
     @Override
     public boolean send(M message, int ttl) {
-        if (!messageValidator.validate(message)) {
-            throw new CustomException(messageValidator.getDetails());
-        }
-        Message<M> msg = new MessageData<>(message, ttl);
+       Message<M> msg = new MessageData<>(message, ttl);
         if(retryCount>0){
             return sendRetry(msg);
         }else {
