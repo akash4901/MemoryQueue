@@ -5,10 +5,6 @@ import org.aks.message.Message;
 
 import java.util.concurrent.atomic.AtomicReference;
 
-/**
- *
- * @param <E>
- */
 public class NonBlockingQueueImpl<E> implements Queue<E> {
 
     private final AtomicReference<CircularQueuePtr> queuePtrRef = new AtomicReference<>(new CircularQueuePtr());

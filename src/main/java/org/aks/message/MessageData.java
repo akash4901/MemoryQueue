@@ -2,12 +2,13 @@ package org.aks.message;
 
 public class MessageData<T> implements Message<T> {
     private final T messageData;
-    private final int ttl;
     private final long timeStamp;
+    private final int ttl;
+
 
     /**
      * @param messageData
-     * @param ttl        0 means no expiry
+     * @param ttl
      */
     public MessageData(T messageData, int ttl) {
         this.messageData = messageData;
